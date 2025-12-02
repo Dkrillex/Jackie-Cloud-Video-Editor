@@ -1,0 +1,5 @@
+{
+  "name": "Jackie Cloud Video Editor",
+  "description": "A professional-grade web-based video editing interface featuring multi-track timelines, dynamic subtitles, and real-time preview simulation. Designed for MoviePy backend integration.",
+  "requestFramePermissions": []
+}
