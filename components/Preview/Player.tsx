@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useEditor } from '../../context/EditorContext';
 import { MediaType, Clip } from '../../types';
-import { Play, Pause, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Move, Maximize2 } from 'lucide-react';
 
 const Player: React.FC = () => {
   const { 
@@ -22,26 +22,32 @@ const Player: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeVideoClip, setActiveVideoClip] = useState<Clip | null>(null);
   const [activeAudioClip, setActiveAudioClip] = useState<Clip | null>(null);
+  const [activeImageClips, setActiveImageClips] = useState<Clip[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
 
   // Identify active clips based on currentTime
   useEffect(() => {
-    // Priority: Bottom-most video track is usually base, but we'll take the top-most visual layer that isn't TEXT
-    // Actually standard NLE behavior: Higher track index = higher Z-index.
-    // Let's assume t-video-2 is above t-video-1.
+    // Find active video clips (base layer)
+    const videoClips = clips.filter(c => 
+      c.type === MediaType.VIDEO &&
+      currentTime >= c.startTime && 
+      currentTime < c.startTime + c.duration
+    );
     
-    // Find active visual clips (excluding text)
-    const visualClips = clips.filter(c => 
-      (c.type === MediaType.VIDEO || c.type === MediaType.IMAGE) &&
+    // Find active image clips (overlay layer)
+    const imageClips = clips.filter(c => 
+      c.type === MediaType.IMAGE &&
       currentTime >= c.startTime && 
       currentTime < c.startTime + c.duration
     );
 
-    // Sort by track index (simple hack: string comparison or predefined order)
-    // In our context: t-video-2 > t-video-1.
-    const sortedVisuals = visualClips.sort((a, b) => a.trackId.localeCompare(b.trackId));
-    const topVisual = sortedVisuals.length > 0 ? sortedVisuals[sortedVisuals.length - 1] : null;
+    // Sort by track index
+    const sortedVideos = videoClips.sort((a, b) => a.trackId.localeCompare(b.trackId));
+    const topVideo = sortedVideos.length > 0 ? sortedVideos[sortedVideos.length - 1] : null;
 
-    setActiveVideoClip(topVisual || null);
+    setActiveVideoClip(topVideo || null);
+    setActiveImageClips(imageClips);
 
     // Find active audio
     const audios = clips.filter(c => 
@@ -49,7 +55,6 @@ const Player: React.FC = () => {
       currentTime >= c.startTime && 
       currentTime < c.startTime + c.duration
     );
-    // Just grab the first one for the prototype mixer
     setActiveAudioClip(audios[0] || null);
 
   }, [currentTime, clips]);
@@ -68,7 +73,6 @@ const Player: React.FC = () => {
       }
       videoRef.current.volume = activeVideoClip.volume ?? 1;
     } else if (videoRef.current) {
-        // No active video
         videoRef.current.pause();
     }
   }, [currentTime, isPlaying, activeVideoClip]);
@@ -91,23 +95,22 @@ const Player: React.FC = () => {
     }
   }, [currentTime, isPlaying, activeAudioClip]);
 
-  // Text Overlay Dragging Logic
-  const handleTextDragStart = (e: React.MouseEvent, clipId: string) => {
+  // 通用拖拽逻辑
+  const handleDragStart = (e: React.MouseEvent, clipId: string) => {
     e.preventDefault();
     e.stopPropagation();
     selectClip(clipId);
+    setIsDragging(true);
     
     const startX = e.clientX;
     const startY = e.clientY;
     const clip = clips.find(c => c.id === clipId);
     if (!clip) return;
 
-    const initialX = clip.x || 50;
-    const initialY = clip.y || 50;
+    const initialX = clip.x ?? 50;
+    const initialY = clip.y ?? 50;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      // 100% = container width/height
-      // Simple sensitivity adjustment
       const container = document.getElementById('preview-container');
       if(!container) return;
       
@@ -122,6 +125,60 @@ const Player: React.FC = () => {
     };
 
     const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // 缩放拖拽逻辑
+  const handleResizeStart = (e: React.MouseEvent, clipId: string, corner: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    selectClip(clipId);
+    setIsResizing(true);
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const clip = clips.find(c => c.id === clipId);
+    if (!clip) return;
+
+    const initialScale = clip.scale ?? 1;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const container = document.getElementById('preview-container');
+      if(!container) return;
+      
+      const rect = container.getBoundingClientRect();
+      
+      // 根据角落位置计算缩放
+      let deltaX = moveEvent.clientX - startX;
+      let deltaY = moveEvent.clientY - startY;
+      
+      // 右下角：正向缩放
+      // 左上角：反向缩放
+      if (corner === 'top-left') {
+        deltaX = -deltaX;
+        deltaY = -deltaY;
+      } else if (corner === 'top-right') {
+        deltaY = -deltaY;
+      } else if (corner === 'bottom-left') {
+        deltaX = -deltaX;
+      }
+      
+      // 使用对角线距离计算缩放比例
+      const delta = (deltaX + deltaY) / 2;
+      const scaleFactor = delta / (rect.width / 4);
+      const newScale = Math.min(3, Math.max(0.1, initialScale + scaleFactor));
+
+      updateClip(clipId, { scale: newScale });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -137,6 +194,100 @@ const Player: React.FC = () => {
     return `${m}:${s}.${ms}`;
   };
 
+  // 渲染可交互的图片/视频层
+  const renderInteractiveLayer = (clip: Clip, isImage: boolean = false) => {
+    const isSelected = selectedClipId === clip.id;
+    const scale = clip.scale ?? 1;
+    const x = clip.x ?? 50;
+    const y = clip.y ?? 50;
+    
+    return (
+      <div
+        key={clip.id}
+        className={`absolute transform -translate-x-1/2 -translate-y-1/2 
+          ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 ring-offset-black' : ''}
+          ${!isDragging && !isResizing ? 'hover:ring-2 hover:ring-white/50' : ''}
+        `}
+        style={{
+          left: `${x}%`,
+          top: `${y}%`,
+          width: isImage ? `${scale * 40}%` : '100%',
+          height: isImage ? 'auto' : '100%',
+          cursor: 'move',
+          zIndex: isSelected ? 20 : 10,
+        }}
+        onMouseDown={(e) => handleDragStart(e, clip.id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          selectClip(clip.id);
+        }}
+      >
+        {isImage ? (
+          <img 
+            src={clip.src} 
+            alt={clip.name}
+            className="w-full h-auto pointer-events-none select-none"
+            style={{ 
+              opacity: clip.opacity ?? 1,
+              transition: 'opacity 0.2s'
+            }}
+            draggable={false}
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            src={clip.src}
+            className="w-full h-full object-contain pointer-events-none"
+            muted
+            style={{ 
+              opacity: clip.opacity ?? 1,
+              transition: 'opacity 0.2s',
+              transform: `scale(${scale})`,
+            }}
+          />
+        )}
+        
+        {/* 选中时显示控制手柄 */}
+        {isSelected && (
+          <>
+            {/* 移动指示器 */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-indigo-600 rounded-full p-2 opacity-80 pointer-events-none">
+              <Move className="w-4 h-4 text-white" />
+            </div>
+            
+            {/* 四角缩放手柄 */}
+            {['top-left', 'top-right', 'bottom-left', 'bottom-right'].map((corner) => (
+              <div
+                key={corner}
+                className={`absolute w-4 h-4 bg-indigo-500 border-2 border-white rounded-sm cursor-${
+                  corner === 'top-left' || corner === 'bottom-right' ? 'nwse' : 'nesw'
+                }-resize hover:bg-indigo-400 transition-colors`}
+                style={{
+                  top: corner.includes('top') ? '-8px' : 'auto',
+                  bottom: corner.includes('bottom') ? '-8px' : 'auto',
+                  left: corner.includes('left') ? '-8px' : 'auto',
+                  right: corner.includes('right') ? '-8px' : 'auto',
+                }}
+                onMouseDown={(e) => handleResizeStart(e, clip.id, corner)}
+              >
+                <Maximize2 className="w-2 h-2 text-white m-0.5" style={{
+                  transform: corner === 'top-left' ? 'rotate(180deg)' :
+                             corner === 'top-right' ? 'rotate(-90deg)' :
+                             corner === 'bottom-left' ? 'rotate(90deg)' : 'rotate(0deg)'
+                }} />
+              </div>
+            ))}
+            
+            {/* 尺寸信息 */}
+            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+              {Math.round(scale * 100)}% | ({Math.round(x)}, {Math.round(y)})
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-slate-950">
       {/* Viewport */}
@@ -145,36 +296,28 @@ const Player: React.FC = () => {
           id="preview-container"
           className="relative bg-black shadow-2xl overflow-hidden"
           style={{ aspectRatio: '16/9', height: '100%', maxHeight: '600px' }}
+          onClick={() => selectClip(null)}
         >
-          {/* Base Video Layer */}
-          {activeVideoClip ? (
-            activeVideoClip.type === MediaType.VIDEO ? (
-              <video
-                ref={videoRef}
-                src={activeVideoClip.src}
-                className="w-full h-full object-contain"
-                muted // We assume audio track handles audio, or mix it carefully. Muting to prevent echo if track has audio separate.
-                style={{ 
-                    opacity: activeVideoClip.opacity ?? 1,
-                    transition: 'opacity 0.2s'
-                }}
-              />
-            ) : (
-                <img 
-                    src={activeVideoClip.src} 
-                    alt="Current frame" 
-                    className="w-full h-full object-cover"
-                    style={{ 
-                        opacity: activeVideoClip.opacity ?? 1,
-                        transition: 'opacity 0.2s'
-                    }}
-                />
-            )
-          ) : (
+          {/* Base Video Layer - 不可交互的底层视频 */}
+          {activeVideoClip && activeVideoClip.type === MediaType.VIDEO && !activeImageClips.find(c => c.id === activeVideoClip.id) ? (
+            <video
+              ref={activeImageClips.length > 0 ? undefined : videoRef}
+              src={activeVideoClip.src}
+              className="w-full h-full object-contain"
+              muted
+              style={{ 
+                opacity: activeVideoClip.opacity ?? 1,
+                transition: 'opacity 0.2s'
+              }}
+            />
+          ) : !activeImageClips.length ? (
             <div className="w-full h-full flex items-center justify-center text-slate-700">
                 <span className="text-xl font-mono">NO SIGNAL</span>
             </div>
-          )}
+          ) : null}
+
+          {/* Image Overlay Layers - 可交互的图片层 */}
+          {activeImageClips.map(clip => renderInteractiveLayer(clip, true))}
 
           {/* Hidden Audio Player */}
           {activeAudioClip && (
@@ -187,9 +330,9 @@ const Player: React.FC = () => {
             .map(textClip => (
               <div
                 key={textClip.id}
-                onMouseDown={(e) => handleTextDragStart(e, textClip.id)}
+                onMouseDown={(e) => handleDragStart(e, textClip.id)}
                 className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move select-none whitespace-nowrap
-                    ${selectedClipId === textClip.id ? 'border-2 border-indigo-500 bg-indigo-500/10' : 'hover:border hover:border-white/50'}
+                    ${selectedClipId === textClip.id ? 'ring-2 ring-indigo-500 bg-indigo-500/10' : 'hover:ring-1 hover:ring-white/50'}
                 `}
                 style={{
                   left: `${textClip.x}%`,
@@ -198,10 +341,21 @@ const Player: React.FC = () => {
                   color: 'white',
                   textShadow: '0 2px 4px rgba(0,0,0,0.8)',
                   padding: '4px 8px',
-                  borderRadius: '4px'
+                  borderRadius: '4px',
+                  zIndex: 30,
                 }}
               >
                 {textClip.name}
+                
+                {/* 文字选中时的缩放手柄 */}
+                {selectedClipId === textClip.id && (
+                  <div
+                    className="absolute -bottom-2 -right-2 w-4 h-4 bg-indigo-500 border-2 border-white rounded-sm cursor-se-resize hover:bg-indigo-400"
+                    onMouseDown={(e) => handleResizeStart(e, textClip.id, 'bottom-right')}
+                  >
+                    <Maximize2 className="w-2 h-2 text-white m-0.5" />
+                  </div>
+                )}
               </div>
             ))
           }

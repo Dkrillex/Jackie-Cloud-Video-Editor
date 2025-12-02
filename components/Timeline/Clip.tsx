@@ -9,6 +9,41 @@ interface ClipProps {
     isSnapping: boolean;
 }
 
+// 检测是否与其他片段重叠
+const checkOverlap = (
+  startTime: number, 
+  duration: number, 
+  otherClips: ClipType[], 
+  excludeId?: string
+): { overlaps: boolean; nearestValidStart: number } => {
+  const endTime = startTime + duration;
+  
+  for (const other of otherClips) {
+    if (excludeId && other.id === excludeId) continue;
+    
+    const otherEnd = other.startTime + other.duration;
+    
+    // 检查是否有重叠
+    if (startTime < otherEnd && endTime > other.startTime) {
+      // 有重叠，找到最近的有效位置
+      // 尝试放在该片段之前或之后
+      const beforePos = other.startTime - duration;
+      const afterPos = otherEnd;
+      
+      // 选择离原位置最近的有效位置
+      const distBefore = Math.abs(startTime - beforePos);
+      const distAfter = Math.abs(startTime - afterPos);
+      
+      return {
+        overlaps: true,
+        nearestValidStart: distBefore <= distAfter ? Math.max(0, beforePos) : afterPos
+      };
+    }
+  }
+  
+  return { overlaps: false, nearestValidStart: startTime };
+};
+
 const Clip: React.FC<ClipProps> = ({ clip, otherClips, isSnapping }) => {
   const { zoom, updateClip, selectClip, selectedClipId } = useEditor();
   const isSelected = selectedClipId === clip.id;
@@ -64,6 +99,12 @@ const Clip: React.FC<ClipProps> = ({ clip, otherClips, isSnapping }) => {
           }
       }
 
+      // 检测是否与其他片段重叠
+      const { overlaps, nearestValidStart } = checkOverlap(newStartTime, clip.duration, otherClips, clip.id);
+      if (overlaps) {
+        newStartTime = nearestValidStart;
+      }
+
       updateClip(clip.id, { startTime: newStartTime });
     };
 
@@ -88,16 +129,39 @@ const Clip: React.FC<ClipProps> = ({ clip, otherClips, isSnapping }) => {
       const deltaTime = deltaPixels / zoom;
 
       if (direction === 'right') {
-          const newDuration = Math.max(0.1, initialDuration.current + deltaTime);
-          updateClip(clip.id, { duration: newDuration });
+          let newDuration = Math.max(0.1, initialDuration.current + deltaTime);
+          
+          // 检测向右扩展时是否会与后面的片段重叠
+          const endTime = clip.startTime + newDuration;
+          for (const other of otherClips) {
+            if (other.startTime > clip.startTime && endTime > other.startTime) {
+              // 限制在后面片段的起始位置
+              newDuration = other.startTime - clip.startTime;
+              break;
+            }
+          }
+          
+          updateClip(clip.id, { duration: Math.max(0.1, newDuration) });
       } else {
           // Resizing from left affects start time and duration
-          const newStartTime = Math.max(0, initialStartTime.current + deltaTime);
-          const durationChange = initialStartTime.current - newStartTime;
-          const newDuration = Math.max(0.1, initialDuration.current + durationChange);
+          let newStartTime = Math.max(0, initialStartTime.current + deltaTime);
+          let durationChange = initialStartTime.current - newStartTime;
+          let newDuration = Math.max(0.1, initialDuration.current + durationChange);
           
-          if (initialDuration.current + (initialStartTime.current - (initialStartTime.current + deltaTime)) > 0.1) {
-             updateClip(clip.id, { startTime: newStartTime, duration: newDuration, offset: Math.max(0, clip.offset - deltaTime) });
+          // 检测向左扩展时是否会与前面的片段重叠
+          for (const other of otherClips) {
+            const otherEnd = other.startTime + other.duration;
+            if (otherEnd <= initialStartTime.current && newStartTime < otherEnd) {
+              // 限制在前面片段的结束位置
+              newStartTime = otherEnd;
+              durationChange = initialStartTime.current - newStartTime;
+              newDuration = Math.max(0.1, initialDuration.current + durationChange);
+              break;
+            }
+          }
+          
+          if (newDuration > 0.1) {
+             updateClip(clip.id, { startTime: newStartTime, duration: newDuration, offset: Math.max(0, clip.offset - (initialStartTime.current - newStartTime)) });
           }
       }
     };

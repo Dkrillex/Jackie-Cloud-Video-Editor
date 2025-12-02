@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useEditor } from '../../context/EditorContext';
 import Track from './Track';
 import { TRACK_HEADER_WIDTH } from '../../constants';
@@ -18,6 +18,26 @@ const Timeline: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const [isSnapping, setIsSnapping] = useState(true);
+  
+  // 自动滚动时间线，确保播放头可见
+  useEffect(() => {
+    if (!containerRef.current || isDraggingPlayhead) return;
+    
+    const container = containerRef.current;
+    const playheadPosition = currentTime * zoom + TRACK_HEADER_WIDTH;
+    const viewportLeft = container.scrollLeft;
+    const viewportRight = viewportLeft + container.clientWidth;
+    const margin = 100; // 边距，提前滚动
+    
+    // 如果播放头在视口右边之外
+    if (playheadPosition > viewportRight - margin) {
+      container.scrollLeft = playheadPosition - container.clientWidth + margin;
+    }
+    // 如果播放头在视口左边之外
+    else if (playheadPosition < viewportLeft + TRACK_HEADER_WIDTH + margin) {
+      container.scrollLeft = Math.max(0, playheadPosition - TRACK_HEADER_WIDTH - margin);
+    }
+  }, [currentTime, zoom, isDraggingPlayhead]);
 
   const handleTimelineMouseDown = (e: React.MouseEvent) => {
     // Only seek if clicking the ruler or empty space in the ruler track

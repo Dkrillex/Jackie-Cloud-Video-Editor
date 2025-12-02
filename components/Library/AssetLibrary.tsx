@@ -5,31 +5,61 @@ import { Asset, MediaType } from '../../types';
 import { Music, Video, Image as ImageIcon, Type, Plus } from 'lucide-react';
 
 const AssetLibrary: React.FC = () => {
-  const { addClip, tracks, seek } = useEditor();
+  const { addClip, tracks, seek, clips } = useEditor();
 
   const handleDragStart = (e: React.DragEvent, asset: Asset) => {
     e.dataTransfer.setData('application/json', JSON.stringify(asset));
     e.dataTransfer.effectAllowed = 'copy';
   };
 
+  // 找到不重叠的有效位置
+  const findValidPosition = (trackId: string, duration: number): number => {
+    const trackClips = clips.filter(c => c.trackId === trackId);
+    if (trackClips.length === 0) return 0;
+    
+    // 按开始时间排序
+    const sortedClips = [...trackClips].sort((a, b) => a.startTime - b.startTime);
+    
+    // 找到最后一个片段的结束时间
+    const lastClip = sortedClips[sortedClips.length - 1];
+    return lastClip.startTime + lastClip.duration;
+  };
+
   const addTextAsset = () => {
+    const textTrackId = tracks.find(t => t.type === MediaType.TEXT)?.id || 't-overlay';
+    const clipDuration = 5;
+    const startTime = findValidPosition(textTrackId, clipDuration);
+    
     const textClip = {
-      id: `clip-${Date.now()}`,
+      id: `clip-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       assetId: 'text-gen',
-      trackId: tracks.find(t => t.type === MediaType.TEXT)?.id || 't-overlay',
-      startTime: 0,
-      duration: 5,
+      trackId: textTrackId,
+      startTime: startTime,
+      duration: clipDuration,
       offset: 0,
       type: MediaType.TEXT,
-      name: 'New Subtitle',
+      name: `Subtitle ${clips.filter(c => c.type === MediaType.TEXT).length + 1}`,
       src: '',
       x: 50,
       y: 80,
       scale: 1,
       opacity: 1,
     };
+    
+    console.log('[添加文字] 新片段:', {
+      id: textClip.id,
+      trackId: textClip.trackId,
+      startTime: textClip.startTime,
+      duration: textClip.duration,
+      existingTextClips: clips.filter(c => c.type === MediaType.TEXT).length
+    });
+    
     addClip(textClip);
-    seek(0);
+    
+    // 延迟一下再 seek，确保状态已更新
+    setTimeout(() => {
+      seek(startTime);
+    }, 50);
   };
 
   return (
