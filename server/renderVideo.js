@@ -253,30 +253,37 @@ export async function renderVideo({
       // 添加字幕
       for (const clip of texts) {
         const textContent = clip.name || clip.asset_src || 'Text';
-        const scale = clip.filters?.transform?.scale || 1;
         const transformX = clip.filters?.transform?.x ?? 50;
         const transformY = clip.filters?.transform?.y ?? 80;
-        const fontSize = Math.round(48 * scale);
         const x = Math.round((transformX / 100) * width);
         const y = Math.round((transformY / 100) * height);
+        
+        // 获取字幕样式
+        const subtitleStyle = clip.subtitle_style || {};
+        const fontColor = subtitleStyle.fontColor || '#ffffff';
+        const strokeColor = subtitleStyle.strokeColor || '#000000';
+        const strokeWidth = subtitleStyle.strokeWidth || 3;
+        const fontSize = subtitleStyle.fontSize || 48;
+        const fontWeight = subtitleStyle.fontWeight || 'normal';
 
-        console.log(`   [SUBTITLE] "${textContent}": pos(${x}, ${y})`);
+        console.log(`   [SUBTITLE] "${textContent}": pos(${x}, ${y}), color=${fontColor}, size=${fontSize}`);
 
         const text = new FFText({
           text: textContent,
           x,
           y,
           fontSize,
-          color: '#ffffff',
+          color: fontColor,
         });
 
         try {
           text.setStyle({
-            fill: '#ffffff',
+            fill: fontColor,
             fontSize,
             fontFamily: 'Arial, Helvetica, sans-serif',
-            stroke: '#000000',
-            strokeThickness: 3,
+            fontWeight: fontWeight === 'bold' ? 'bold' : 'normal',
+            stroke: strokeColor,
+            strokeThickness: strokeWidth,
           });
         } catch (e) {}
 

@@ -327,37 +327,49 @@ const Player: React.FC = () => {
           {/* Text Overlays */}
           {clips
             .filter(c => c.type === MediaType.TEXT && currentTime >= c.startTime && currentTime < c.startTime + c.duration)
-            .map(textClip => (
-              <div
-                key={textClip.id}
-                onMouseDown={(e) => handleDragStart(e, textClip.id)}
-                className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move select-none whitespace-nowrap
-                    ${selectedClipId === textClip.id ? 'ring-2 ring-indigo-500 bg-indigo-500/10' : 'hover:ring-1 hover:ring-white/50'}
-                `}
-                style={{
-                  left: `${textClip.x}%`,
-                  top: `${textClip.y}%`,
-                  fontSize: `${(textClip.scale || 1) * 2}rem`,
-                  color: 'white',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.8)',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  zIndex: 30,
-                }}
-              >
-                {textClip.name}
-                
-                {/* 文字选中时的缩放手柄 */}
-                {selectedClipId === textClip.id && (
-                  <div
-                    className="absolute -bottom-2 -right-2 w-4 h-4 bg-indigo-500 border-2 border-white rounded-sm cursor-se-resize hover:bg-indigo-400"
-                    onMouseDown={(e) => handleResizeStart(e, textClip.id, 'bottom-right')}
-                  >
-                    <Maximize2 className="w-2 h-2 text-white m-0.5" />
-                  </div>
-                )}
-              </div>
-            ))
+            .map(textClip => {
+              const style = textClip.subtitleStyle || {};
+              const fontColor = style.fontColor || '#ffffff';
+              const strokeColor = style.strokeColor || '#000000';
+              const strokeWidth = style.strokeWidth || 3;
+              const fontSize = style.fontSize || 48;
+              const fontWeight = style.fontWeight || 'normal';
+              
+              return (
+                <div
+                  key={textClip.id}
+                  onMouseDown={(e) => handleDragStart(e, textClip.id)}
+                  className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move select-none whitespace-nowrap
+                      ${selectedClipId === textClip.id ? 'ring-2 ring-indigo-500 bg-indigo-500/10' : 'hover:ring-1 hover:ring-white/50'}
+                  `}
+                  style={{
+                    left: `${textClip.x || 50}%`,
+                    top: `${textClip.y || 80}%`,
+                    fontSize: `${fontSize / 24}rem`,
+                    fontWeight: fontWeight,
+                    color: fontColor,
+                    WebkitTextStroke: `${strokeWidth}px ${strokeColor}`,
+                    paintOrder: 'stroke fill',
+                    textShadow: `0 2px 4px rgba(0,0,0,0.5)`,
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    zIndex: 30,
+                  }}
+                >
+                  {textClip.name}
+                  
+                  {/* 文字选中时的缩放手柄 */}
+                  {selectedClipId === textClip.id && (
+                    <div
+                      className="absolute -bottom-2 -right-2 w-4 h-4 bg-indigo-500 border-2 border-white rounded-sm cursor-se-resize hover:bg-indigo-400"
+                      onMouseDown={(e) => handleResizeStart(e, textClip.id, 'bottom-right')}
+                    >
+                      <Maximize2 className="w-2 h-2 text-white m-0.5" />
+                    </div>
+                  )}
+                </div>
+              );
+            })
           }
         </div>
       </div>

@@ -103,7 +103,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 .sort((a, b) => a.startTime - b.startTime)
                 .map(clip => ({
                     id: clip.id,
-                    type: clip.type, // 添加 clip 自身的类型
+                    type: clip.type,
                     name: clip.name,
                     asset_src: clip.src,
                     start_time: clip.startTime,
@@ -121,7 +121,8 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     transitions: {
                         in: clip.transitionIn,
                         out: clip.transitionOut
-                    }
+                    },
+                    subtitle_style: clip.subtitleStyle
                 }));
 
             return {

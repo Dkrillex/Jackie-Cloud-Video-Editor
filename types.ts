@@ -15,6 +15,18 @@ export interface Asset {
   duration?: number; // in seconds
 }
 
+// 字幕样式
+export interface SubtitleStyle {
+  fontFamily?: string;
+  fontSize?: number;
+  fontColor?: string;
+  fontWeight?: 'normal' | 'bold';
+  backgroundColor?: string;
+  strokeColor?: string;
+  strokeWidth?: number;
+  textAlign?: 'left' | 'center' | 'right';
+}
+
 export interface Clip {
   id: string;
   assetId: string;
@@ -32,6 +44,9 @@ export interface Clip {
   scale?: number;
   opacity?: number;
   volume?: number; // 0-1
+
+  // 字幕样式 (仅 TEXT 类型)
+  subtitleStyle?: SubtitleStyle;
 
   // Transition
   transitionIn?: 'none' | 'fade' | 'dissolve';
