@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Server cache and output (large video files)
+server/cache/
+server/output/
+*.mp4
+*.webm
